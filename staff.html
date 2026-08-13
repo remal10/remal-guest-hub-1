@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en" id="htmlRoot" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Remal Hotel - Staff Portal</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #FAFAFA; color: #222222; }
+    .font-serif-luxury { font-family: 'Playfair Display', serif; }
+    .bg-remal-sand { background-color: #E2B383; }
+    .text-remal-sand { color: #DCA773; }
+  </style>
+</head>
+<body class="min-h-screen pb-20">
+
+  <!-- MODALE DE CONNEXION STAFF -->
+  <div id="authModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-5 border border-stone-100">
+      <div class="text-center space-y-1">
+        <h3 class="text-lg font-serif-luxury font-bold text-stone-900">Staff Authentication</h3>
+        <p class="text-xs text-stone-500">Sign in with your department credentials</p>
+      </div>
+      <form id="loginForm" onsubmit="loginAdmin(event)" class="space-y-4">
+        <div>
+          <label class="block text-[11px] font-bold text-stone-600 uppercase mb-1">Email Address</label>
+          <input type="email" id="loginEmail" placeholder="staff@remalhotel.com" class="w-full border border-stone-200 rounded-xl p-3 text-xs bg-stone-50 outline-none" required>
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold text-stone-600 uppercase mb-1">Password</label>
+          <input type="password" id="loginPassword" placeholder="••••••••" class="w-full border border-stone-200 rounded-xl p-3 text-xs bg-stone-50 outline-none" required>
+        </div>
+        <p id="authErrorMsg" class="text-rose-600 text-[11px] font-semibold text-center hidden"></p>
+        <button type="submit" class="w-full bg-stone-900 hover:bg-stone-800 text-white font-bold py-3 rounded-xl text-xs transition shadow-md">🔐 Unlock Dashboard</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- PANNEAU STAFF -->
+  <div id="adminView" class="hidden max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+    <div class="flex justify-between items-center bg-stone-200/80 p-1.5 rounded-2xl text-xs font-bold overflow-x-auto">
+      <div class="flex space-x-2" id="staffTabsContainer">
+        <button onclick="switchAdminTab('requests')" id="admTabRequests" class="px-4 py-2.5 rounded-xl bg-stone-900 text-white whitespace-nowrap">🔔 Live Requests</button>
+        <button onclick="switchAdminTab('offers')" id="admTabOffers" class="px-4 py-2.5 rounded-xl text-stone-600 whitespace-nowrap">🏷️ Content & Menu</button>
+        <button onclick="switchAdminTab('feedback')" id="admTabFeedback" class="px-4 py-2.5 rounded-xl text-stone-600 whitespace-nowrap">⭐ Reviews</button>
+        <button onclick="switchAdminTab('analytics')" id="admTabAnalytics" class="px-4 py-2.5 rounded-xl text-stone-600 whitespace-nowrap">📊 Analytics</button>
+      </div>
+      <div>
+        <button onclick="logoutAdmin()" class="bg-rose-50 hover:bg-rose-100 text-rose-700 px-3 py-1.5 rounded-xl text-xs font-bold border border-rose-200 transition">🚪 Logout</button>
+      </div>
+    </div>
+
+    <!-- REQUÊTES -->
+    <div id="adminRequestsPanel" class="space-y-4">
+      <div class="bg-white rounded-3xl p-6 shadow-sm border border-stone-200 space-y-4">
+        <div class="flex justify-between items-center border-b pb-3">
+          <h2 class="text-base font-serif-luxury font-bold">Live Service Requests (<span id="staffRoleDisplay">Staff</span>)</h2>
+          <button onclick="fetchRequestsFromCloud()" class="text-xs bg-stone-100 px-3 py-2 rounded-xl font-semibold">🔄 Refresh</button>
+        </div>
+        <div id="adminRequestsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+      </div>
+    </div>
+
+    <!-- OFFRES ET MENU -->
+    <div id="adminOffersPanel" class="hidden space-y-4">
+      <div class="bg-white rounded-3xl p-6 shadow-sm border border-stone-200">
+        <h2 class="text-base font-serif-luxury font-bold mb-4">Content Management</h2>
+        <p class="text-xs text-stone-500">Manage promotional offers and room service items here.</p>
+      </div>
+    </div>
+
+    <!-- AVIS -->
+    <div id="adminFeedbackPanel" class="hidden space-y-4">
+      <div class="bg-white rounded-3xl p-6 shadow-sm border border-stone-200 space-y-4">
+        <h2 class="text-base font-serif-luxury font-bold border-b pb-2">Guest Feedback & Ratings</h2>
+        <div id="adminFeedbackContainer" class="space-y-3"><p class="text-xs text-stone-400">Loading...</p></div>
+      </div>
+    </div>
+
+    <!-- ANALYTICS -->
+    <div id="adminAnalyticsPanel" class="hidden space-y-4">
+      <div class="bg-white rounded-3xl p-6 shadow-sm border border-stone-200 space-y-4">
+        <h2 class="text-base font-serif-luxury font-bold border-b pb-2">Analytics & Performance</h2>
+        <p id="statTotalReq" class="text-xs text-stone-600">Calculating metrics...</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://bqusphztkwxacczqeiuo.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxdXNwaHp0a3d4YWNjenFlaXVvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTg3MDgsImV4cCI6MjEwMDc3NDcwOH0.geeVnnELbA85xXfDsW9pry_VcdJTfiC_bjw_48XC6Ik';
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let cachedRequests = [];
+    let currentStaffRole = 'admin';
+
+    async function initStaff() {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (!session) {
+        document.getElementById('authModal').classList.remove('hidden');
+        return;
+      }
+      await applyStaffPermissions(session.user.id);
+    }
+
+    async function loginAdmin(event) {
+      event.preventDefault();
+      const email = document.getElementById('loginEmail').value;
+      const password = document.getElementById('loginPassword').value;
+      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        document.getElementById('authErrorMsg').innerText = "❌ Invalid email or password.";
+        document.getElementById('authErrorMsg').classList.remove('hidden');
+      } else {
+        document.getElementById('authModal').classList.add('hidden');
+        await applyStaffPermissions(data.session.user.id);
+      }
+    }
+
+    async function logoutAdmin() {
+      await supabaseClient.auth.signOut();
+      window.location.reload();
+    }
+
+    async function applyStaffPermissions(userId) {
+      // Interroge la table staff_profiles que vous avez créée en SQL
+      const { data: profile, error } = await supabaseClient
+        .from('staff_profiles')
+        .select('role, department, full_name')
+        .eq('id', userId)
+        .single();
+
+      if (error || !profile) {
+        alert("Access Denied: No staff profile found for this user.");
+        await logoutAdmin();
+        return;
+      }
+
+      currentStaffRole = profile.role;
+      document.getElementById('staffRoleDisplay').innerText = `${profile.full_name} (${profile.role.toUpperCase()})`;
+      document.getElementById('adminView').classList.remove('hidden');
+
+      // Filtrage par Rôle (RBAC)
+      if (profile.role === 'kitchen' || profile.role === 'maintenance') {
+        ['admTabOffers', 'admTabFeedback', 'admTabAnalytics'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.style.display = 'none';
+        });
+        switchAdminTab('requests');
+      }
+
+      fetchRequestsFromCloud();
+    }
+
+    async function fetchRequestsFromCloud() {
+      let query = supabaseClient.from('requests').select('*').order('id', { ascending: false });
+      
+      // Sécurité additionnelle côté client selon le rôle
+      if (currentStaffRole === 'kitchen') {
+        query = query.ilike('service', '%Room Service%');
+      } else if (currentStaffRole === 'maintenance') {
+        query = query.ilike('service', '%Maintenance%');
+      }
+
+      const { data } = await query;
+      cachedRequests = data || [];
+      renderAdminRequests();
+    }
+
+    function renderAdminRequests() {
+      const container = document.getElementById('adminRequestsContainer');
+      if (!cachedRequests.length) { container.innerHTML = `<p class="text-xs text-stone-400 col-span-2">No active requests found.</p>`; return; }
+      container.innerHTML = cachedRequests.map(req => `
+        <div class="p-4 bg-stone-50 rounded-2xl border text-xs space-y-3">
+          <div class="flex justify-between font-bold"><span>Room: ${req.room}</span><span class="text-remal-sand">${req.service}</span></div>
+          <p class="bg-white p-3 rounded-xl border">${req.details}</p>
+          <div class="flex justify-between items-center pt-2 border-t">
+            <span class="px-2 py-0.5 rounded font-bold ${req.status === 'Completed' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">${req.status || 'Pending'}</span>
+            <div class="space-x-1">
+              <button onclick="updateRequestStatus(${req.id}, 'In Progress')" class="px-2 py-1 bg-blue-100 text-blue-800 rounded font-semibold">In Progress</button>
+              <button onclick="updateRequestStatus(${req.id}, 'Completed')" class="px-2 py-1 bg-emerald-100 text-emerald-800 rounded font-semibold">Complete</button>
+            </div>
+          </div>
+        </div>`).join('');
+    }
+
+    async function updateRequestStatus(id, newStatus) {
+      await supabaseClient.from('requests').update({ status: newStatus }).eq('id', id);
+      fetchRequestsFromCloud();
+    }
+
+    function switchAdminTab(tab) {
+      ['adminRequestsPanel', 'adminOffersPanel', 'adminFeedbackPanel', 'adminAnalyticsPanel'].forEach(p => document.getElementById(p).classList.add('hidden'));
+      if (tab === 'requests') document.getElementById('adminRequestsPanel').classList.remove('hidden');
+      else if (tab === 'offers') document.getElementById('adminOffersPanel').classList.remove('hidden');
+      else if (tab === 'feedback') document.getElementById('adminFeedbackPanel').classList.remove('hidden');
+      else if (tab === 'analytics') document.getElementById('adminAnalyticsPanel').classList.remove('hidden');
+    }
+
+    window.onload = initStaff;
+  </script>
+</body>
+</html>
